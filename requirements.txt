@@ -1,0 +1,11 @@
+pandas
+python-binance
+websocket-client
+asyncpg
+psycopg2
+# nautilus-trader
+matplotlib
+seaborn
+paramiko==2.12.0 
+sshtunnel==0.4.0
+dotenv
