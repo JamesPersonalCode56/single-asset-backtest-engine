@@ -1,128 +1,58 @@
-# Vector-BT: Vectorized Backtesting Framework for Single Assets
+# Single-Asset Vector Backtest Engine
 
-Vector-BT is a Python-based framework for performing vectorized backtests on trading strategies for a single asset. It provides tools to calculate key performance metrics, visualize results, and analyze trading performance efficiently using pandas and numpy for vectorized operations.
+Python backtesting helper focused on **vectorized** single-asset strategies (pandas/numpy). It builds equity/fee series once, then exposes metrics and plots for quick strategy evaluation.
 
-## Features
+## What it does
+- Vectorized P&L with fees: pre-compute `gain`, `fee_cost`, cumulative `total_gain`/`total_gain_after_fee`.
+- Two DataFrames for inspection:
+  - `bt.df`: full timeline (Datetime index) with positions, P&L, fees.
+  - `bt.df2`: trade-only rows (where position changes).
+- Metrics: total return (gross/net), profit per trade, trades/day, MDD, Calmar, Sharpe (buy & hold), hit rates (overall/long/short), Ulcer Index, CDaR, Kelly, etc.
+- Visualization:
+  - `plot_dashboard()`: equity (net), drawdown %, positions (daily resample), optional buy & hold overlay.
+  - `plot_monthly_returns_heatmap()`: monthly heatmap.
+  - `analyze()`: prints metrics then shows dashboard + heatmap.
+- Utilities: `normalize_df` (clean date/time columns), `resample` OHLCV.
 
-- **Vectorized Calculations**: Efficient computation of positions, gains, fees, and metrics using pandas Series operations.
-- **Performance Metrics**: Includes calculations for:
-  - Total return (before and after fees)
-  - Margin
-  - Sharpe ratio
-  - Maximum Drawdown (MDD)
-  - Hit rate (overall, long, short)
-  - Average win/loss percentages
-  - CAGR/MDD ratio
-  - Trading frequency
-  - etc.
-- **Visualization**:
-  - Dashboard with equity curve, drawdown, and position charts
-  - Monthly returns heatmap
-- **Customizable**: Supports transaction fees and multi-level positions (e.g., DCA).
-
-## Installation
-
-Vector-BT requires Python 3.12+.
-
-### Using pip and requirements.txt
-
-Install dependencies:
-
-```
+## Install
+```bash
 pip install -r requirements.txt
 ```
+Requires Python 3.12+.
 
-## Quick Start
-
-1. Config:
-
+## Quick start
 ```python
-# config.py
-SSH_CONFIG = {
-    'host': 'your-ssh-server.com',
-    'username': 'your-username',
-    'key_path': '~/.ssh/id_rsa',  # hoặc đường dẫn SSH key
-    'password': None  # hoặc password nếu không dùng key
-}
+import pandas as pd
+from backtest import BacktestInformation, normalize_df
 
-DATABASE_CONFIG = {
-    'historical': {
-        'remote_port': 5432,
-        'db_name': 'historical_data',
-        'db_user': 'your-db-user',
-        'db_password': 'your-db-password',
-        'max_conn': 10
-    },
-    'live': {
-        'remote_port': 5433,
-        'db_name': 'live_data',
-        'db_user': 'your-db-user',
-        'db_password': 'your-db-password',
-        'max_conn': 5
-    }
-}
-```
+# Load your OHLCV with a Date column and build positions
+df = pd.read_csv("your_data.csv")
+df = normalize_df(df)  # adds Datetime column sorted ascending
 
-2. Define your strategy: Generate position signals (e.g., Series of positions: positive for long, negative for short, 0 for neutral).
+position = ...  # pd.Series of target position per bar (long>0, short<0, flat=0)
 
-3. Run backtest:
-
-```python
-bt = vbt.BacktestInformation(
-    Datetime=df['Datetime'],
-    Position=position_series,  # Your position signals
-    Close=df['Close'],
-    fee=0.001  # 0.1% fee per trade
+bt = BacktestInformation(
+    Datetime=df["Datetime"],
+    Position=position,
+    Close=df["Close"],
+    fee=0.001,  # e.g., 0.1% per round trip (split internally)
 )
 
-# Display metrics and plots
-bt.analyze()
+bt.analyze()  # prints metrics, shows dashboard + monthly heatmap
+
+# Access data
+timeline = bt.df   # full timeline
+trades = bt.df2    # trades only
 ```
 
-This will print key metrics and display:
-- Performance dashboard (equity curve, drawdown, positions)
-- Monthly returns heatmap
+## Main methods (backtest.BacktestInformation)
+- `analyze(figsize=(15, 8), show_buy_hold=True)`
+- `metrics(window_MA=None, plot=True)`
+- `plot_dashboard(figsize=(15, 8), show_buy_hold=True)`
+- `plot_monthly_returns_heatmap()`
+- Metric helpers: `Margin()`, `MDD()`, `Total_Return_Percent[_After_Fee]()`, `Hitrate[_long/_short]()`, `Profit_per_trade()`, `Ulcer_Index()`, `CDaR()`, `Kelly_Criterion()`, etc.
 
-## Trade Log Export
-
-Access detailed trade data through the backtest object's DataFrames:
-
-### Complete Backtest Data (.df)
-```python
-# Access the complete backtest DataFrame
-backtest_df = bt.df
-
-# Key columns include:
-# - Datetime: Timestamp of each data point
-# - Position: Current position size
-# - Close: Asset closing price
-# - gain: Position gain before fees
-# - fee_cost: Transaction fees
-# - gain_after_fee: Position gain after fees
-# - total_gain: Cumulative gain before fees
-# - total_gain_after_fee: Cumulative gain after fees
-```
-
-### Trade-Only Data (.df2)
-```python
-# Access DataFrame with only trade entries (when positions change)
-trades_df = bt.df2
-
-# Key columns include:
-# - Datetime: Trade timestamp
-# - Position: New position after trade
-# - input_pos: Position change (positive for buy, negative for sell)
-# - gain_after_fee: Realized gain/loss for that trade
-```
-
-## Key Methods
-
-- `analyze()`: Computes all metrics and displays dashboard/heatmap.
-- `metrics()`: Prints detailed performance statistics.
-- `plot_dashboard()`: Visualizes returns, drawdown, and positions.
-- `plot_monthly_returns_heatmap()`: Shows monthly performance heatmap.
-- Individual metric getters like `Sharp_after_fee()`, `MDD()`, `Hitrate()`, etc.
-
-## Contributing
-
-Contributions are welcome! Please open an issue or submit a pull request.
+## Notes
+- Positions and prices are expected as aligned Series; fee is split buy/sell internally.
+- Resampling inside plots/metrics uses daily frequency to align equity/drawdown.
+- If you need to bind to databases or SSH (requirements.txt includes DB/SSH libs), add your own data-loading code before constructing `BacktestInformation`.
